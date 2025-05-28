@@ -1,8 +1,9 @@
-﻿using System.Linq;
-using BepInEx.Logging;
+﻿using BepInEx.Logging;
 using Il2CppInterop.Runtime;
 using ProjectM;
+using ProjectM.Scripting;
 using Stunlock.Core;
+using System.Linq;
 using Unity.Collections;
 using Unity.Entities;
 
@@ -15,17 +16,22 @@ internal static class Core
     // V Rising systems
     public static EntityManager EntityManager { get; } = Server.EntityManager;
     public static PrefabCollectionSystem PrefabCollectionSystem { get; internal set; }
+    public static ServerScriptMapper ServerScriptMapper { get; internal set; }
+    public static ServerGameManager ServerGameManager => ServerScriptMapper.GetServerGameManager();
 
     // BepInEx services
     public static ManualLogSource Log => Plugin.LogInstance;
 
     static bool hasInitialized;
 
+    public static readonly PrefabGUID ExternalInventoryPrefab = new(1183666186);
+
     public static void Initialize()
     {
         if (hasInitialized) return;
 
         PrefabCollectionSystem = Server.GetExistingSystemManaged<PrefabCollectionSystem>();
+        ServerScriptMapper = Server.GetExistingSystemManaged<ServerScriptMapper>();
 
         ModifyPedestalInventories();
 
@@ -37,6 +43,7 @@ internal static class Core
         Log.LogInfo($"Modifying soulshard pedestals");
 
         var entityManager = EntityManager;
+        var serverGameManager = Core.ServerGameManager;
 
         var eqb = new EntityQueryBuilder(Allocator.Temp)
             .AddAll(new(Il2CppType.Of<PrefabGUID>(), ComponentType.AccessMode.ReadOnly))
@@ -44,20 +51,12 @@ internal static class Core
             .AddAll(new(Il2CppType.Of<AttachedBuffer>(), ComponentType.AccessMode.ReadOnly))
             .WithOptions(EntityQueryOptions.IncludeDisabledEntities | EntityQueryOptions.IncludePrefab);
 
-        var eqbi = new EntityQueryBuilder(Allocator.Temp)
-            .AddAll(new(Il2CppType.Of<InventoryConnection>(), ComponentType.AccessMode.ReadOnly))
-            .WithOptions(EntityQueryOptions.IncludeDisabledEntities | EntityQueryOptions.IncludePrefab);
-
         var eq = Core.EntityManager.CreateEntityQuery(ref eqb);
-        var eqi = Core.EntityManager.CreateEntityQuery(ref eqbi);
         eqb.Dispose();
-        eqbi.Dispose();
 
         var entities = eq.ToEntityArray(Allocator.Temp);
-        var inventoryEntities = eqi.ToEntityArray(Allocator.Temp);
 
         Log.LogInfo($"Found {entities.Length} enities matching query for pedestal");
-        Log.LogInfo($"Found {inventoryEntities.Length} enities matching query for inventory");
 
         foreach (var entity in entities)
         {
@@ -68,19 +67,23 @@ internal static class Core
             {
                 Log.LogDebug($"Entity {name} has component types: \n{string.Join("\n\t\t", entity.GetComponentTypeStrings())}");
 
-                foreach (var inventoryEntity in inventoryEntities)
+                if (!serverGameManager.TryGetBuffer<AttachedBuffer>(entity, out var buffer))
+                    continue;
+
+                foreach (var attachedBuffer in buffer)
                 {
-                    var conn = inventoryEntity.Read<InventoryConnection>();
-                    if (conn.InventoryOwner == entity)
+                    var attachedEntity = attachedBuffer.Entity;
+                    if (!attachedEntity.Has<PrefabGUID>()) continue;
+                    if (!attachedEntity.Read<PrefabGUID>().Equals(ExternalInventoryPrefab)) continue;
+
+                    var inventoryBuffer = attachedEntity.ReadBuffer<InventoryBuffer>();
+                    Log.LogDebug($"Found inventory for {name} with {inventoryBuffer.Length} slots.");
+
+                    int desiredSlots = 8; // TODO: get from config or command
+                    if (inventoryBuffer.Length < desiredSlots)
                     {
-                        var inventoryBuffer = inventoryEntity.ReadBuffer<InventoryBuffer>();
-                        
-                        int desiredSlots = 8; // TODO: get from config or command
-                        if (inventoryBuffer.Length < desiredSlots)
-                        {
-                            inventoryBuffer.Resize(desiredSlots, NativeArrayOptions.ClearMemory);
-                            Log.LogInfo($"Resized inventory for {name} to {desiredSlots} slots.");
-                        }
+                        inventoryBuffer.Resize(desiredSlots, NativeArrayOptions.ClearMemory);
+                        Log.LogInfo($"Resized inventory for {name} to {desiredSlots} slots.");
                     }
                 }
             }
