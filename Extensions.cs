@@ -16,7 +16,7 @@ internal static class Extensions
 
     public static string LookupName(this PrefabGUID prefabGuid)
     {
-        return (PrefabCollectionSystem._PrefabLookupMap.TryGetFixedName(prefabGuid, out var name)
+        return (PrefabCollectionSystem._PrefabLookupMap.TryGetName(prefabGuid, out var name)
             ? name + " " + prefabGuid : "GUID Not Found").ToString();
     }
 
