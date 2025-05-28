@@ -1,12 +1,12 @@
 ﻿<Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup>
     <TargetFramework>net6.0</TargetFramework>
-    <AssemblyName>SoulShardUtilities</AssemblyName>
+    <AssemblyName>VRisingUtilities</AssemblyName>
     <Description>soulshards</Description>
     <Version>0.0.0</Version>
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
     <LangVersion>latest</LangVersion>
-    <RootNamespace>SoulShardUtilities</RootNamespace>
+    <RootNamespace>VRisingUtilities</RootNamespace>
     <AssemblyVersion>0.1.10.0</AssemblyVersion>
     <FileVersion>$(Version)</FileVersion>
     <InformationalVersion>0.1.10+1.Branch.main.Sha.c33d0879382e1a0da34861ec55914ba7e637a80e</InformationalVersion>

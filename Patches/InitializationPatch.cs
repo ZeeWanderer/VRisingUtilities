@@ -1,7 +1,7 @@
 ﻿using HarmonyLib;
 using Unity.Scenes;
 
-namespace SoulShardUtilities.Patches;
+namespace VRisingUtilities.Patches;
 
 [HarmonyPatch(typeof(SceneSectionStreamingSystem), nameof(SceneSectionStreamingSystem.ShutdownAsynchrnonousStreamingSupport))]
 public static class InitializationPatch

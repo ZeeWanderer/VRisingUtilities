@@ -6,7 +6,7 @@ using Stunlock.Core;
 using Unity.Collections;
 using Unity.Entities;
 
-namespace SoulShardUtilities;
+namespace VRisingUtilities;
 
 internal static class Core
 {
@@ -19,13 +19,17 @@ internal static class Core
     // BepInEx services
     public static ManualLogSource Log => Plugin.LogInstance;
 
+    static bool hasInitialized;
+
     public static void Initialize()
     {
+        if (hasInitialized) return;
+
         PrefabCollectionSystem = Server.GetExistingSystemManaged<PrefabCollectionSystem>();
 
         ModifyPedestalInventories();
 
-        Log.LogInfo($"Core initialized");
+        hasInitialized = true;
     }
 
     private static void ModifyPedestalInventories()
@@ -36,6 +40,8 @@ internal static class Core
 
         var eqb = new EntityQueryBuilder(Allocator.Temp)
             .AddAll(new(Il2CppType.Of<PrefabGUID>(), ComponentType.AccessMode.ReadOnly))
+            .AddAll(new(Il2CppType.Of<InventoryOwner>(), ComponentType.AccessMode.ReadOnly))
+            .AddAll(new(Il2CppType.Of<AttachedBuffer>(), ComponentType.AccessMode.ReadOnly))
             .WithOptions(EntityQueryOptions.IncludeDisabledEntities | EntityQueryOptions.IncludePrefab);
 
         var eqbi = new EntityQueryBuilder(Allocator.Temp)
@@ -50,7 +56,8 @@ internal static class Core
         var entities = eq.ToEntityArray(Allocator.Temp);
         var inventoryEntities = eqi.ToEntityArray(Allocator.Temp);
 
-        Log.LogInfo($"Found {entities.Length} enities matching query");
+        Log.LogInfo($"Found {entities.Length} enities matching query for pedestal");
+        Log.LogInfo($"Found {inventoryEntities.Length} enities matching query for inventory");
 
         foreach (var entity in entities)
         {
@@ -59,23 +66,19 @@ internal static class Core
             var name = guid.LookupName();
             if (name.Contains("TM_Castle_Container_Specialized_Soulshards_"))
             {
-                var types = entity.GetComponentTypeStrings();
-                foreach (var type in types)
-                {
-                    Log.LogInfo($"Entity {name} has component types: {string.Join(", ", types)}");
-                }
+                Log.LogDebug($"Entity {name} has component types: \n{string.Join("\n\t\t", entity.GetComponentTypeStrings())}");
 
                 foreach (var inventoryEntity in inventoryEntities)
                 {
                     var conn = inventoryEntity.Read<InventoryConnection>();
                     if (conn.InventoryOwner == entity)
                     {
-                        var inventoryBuffer = entityManager.GetBuffer<InventoryBuffer>(inventoryEntity);
+                        var inventoryBuffer = inventoryEntity.ReadBuffer<InventoryBuffer>();
                         
                         int desiredSlots = 8; // TODO: get from config or command
                         if (inventoryBuffer.Length < desiredSlots)
                         {
-                            inventoryBuffer.ResizeUninitialized(desiredSlots);
+                            inventoryBuffer.Resize(desiredSlots, NativeArrayOptions.ClearMemory);
                             Log.LogInfo($"Resized inventory for {name} to {desiredSlots} slots.");
                         }
                     }
@@ -84,7 +87,7 @@ internal static class Core
         }
     }
 
-    static World GetWorld(string name)
+    static public World GetWorld(string name)
     {
         foreach (var world in World.s_AllWorlds)
         {
